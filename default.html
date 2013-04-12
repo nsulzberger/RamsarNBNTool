@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/js/dojo/dijit/themes/claro/claro.css" rel="stylesheet" type="text/css" >
+<link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/js/esri/css/esri.css" />
+<script src="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/" type="text/javascript"></script>
+<link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/js/dojo/dijit/themes/tundra/tundra.css">
+
+<style>
+  html,body,#mapDiv,.map.container{
+    padding:0;
+    margin:0;
+    height:100%;
+  }
+  
+  #infoContainer{
+	width:100%;
+	position:absolute;
+	bottom:5px;
+	z-index:50;
+  }
+  
+  #info{
+	border: 2px solid;
+	border-radius:5px;
+	color:#000; 
+	z-index:50;
+	background-color:white;
+	width:150px;
+	margin:0px auto;
+	font-family:segoe ui;
+	text-align:center;
+	font-size:14px;
+  }
+  </style>
+  
+</head>
+<body>
+<body class="claro">
+  <div id="mapDiv">
+	<div id="infoContainer" />
+		<div id="info" />
+	</div>
+  </div>
+</body>
+
+</body>
+<script type="text/javascript">
+		dojo.require("dijit.layout.BorderContainer");
+		dojo.require("dijit.layout.ContentPane");
+		dojo.require("esri.map");
+		dojo.require("esri.layers.FeatureLayer");
+		dojo.require("esri.dijit.Popup");
+
+		var map;
+  function init() {
+  
+  
+      //define custom popup options
+        var popupOptions = {
+          markerSymbol: new esri.symbol.SimpleMarkerSymbol("circle", 32, null, new dojo.Color([0, 0, 0, 0.25])),
+          marginLeft: "20", 
+          marginTop: "20"
+        };
+        //create a popup to replace the map's info window
+        var popup = new esri.dijit.Popup(popupOptions, dojo.create("div"));
+        
+        map = new esri.Map("mapDiv", {
+          basemap: "topo",
+          center: [-1.131592,52.636397],
+          zoom: 8,
+          infoWindow: popup
+        });
+        
+        //define a popup template
+        var popupTemplate = new esri.dijit.PopupTemplate({
+          title: "{SITE_NAME}",
+          fieldInfos: [
+          {fieldName: "SITE_CODE", visible: true, label:"Site Number"},
+          {fieldName: "NBNCODE", visible:true, label:"NBN Code" }
+          ],
+          showAttachments:true
+        });
+	  
+	    //create a feature layer with watershed features of californian coast
+        var featureLayer = new esri.layers.FeatureLayer("https://services.arcgis.com/QHC5QIxkyl7GRuXB/arcgis/rest/services/UK_Ramsar_GIS_NBN/FeatureServer/0", {
+          mode: esri.layers.FeatureLayer.MODE_SNAPSHOT,
+          infoTemplate: popupTemplate,
+          outFields: ["SITE_NAME", "SITE_CODE", "NBNCODE"],
+		  transparency:0.5
+        });
+        
+        dojo.connect(featureLayer, "onClick", function(evt){
+           map.infoWindow.setFeatures([evt.graphic]);
+		   
+		dojo.connect(map, "onMouseMove", showCoordinates);
+		dojo.connect(map, "onMouseDrag", showCoordinates);
+        });
+    dojo.connect(map, "onZoomEnd", function() { featureLayer.setMaxAllowableOffset(maxOffset(map,1)); }); 
+		
+		function showCoordinates(evt) {
+        //get mapPoint from event
+        //The map is in web mercator - modify the map point to display the results in geographic
+        var mp = esri.geometry.webMercatorToGeographic(evt.mapPoint);
+        //display mouse coordinates
+        dojo.byId("info").innerHTML = mp.x.toFixed(3) + ", " + mp.y.toFixed(3);
+      }
+
+
+    //The offset is calculated as approximately 1 vertex per pixel: 
+    var maxOffset = function maxOffset(map, pixelTolerance) { 
+      var offset = Math.floor(map.extent.getWidth() / map.width) * pixelTolerance;
+      console.log(offset);
+      return offset; };
+	  
+        
+        map.addLayer(featureLayer);
+
+		
+  }
+  
+  
+  
+  dojo.addOnLoad(init);
+  </script>
+</body>
+</html>
