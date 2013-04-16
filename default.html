@@ -3,6 +3,8 @@
 <head>
 <link href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/js/dojo/dijit/themes/claro/claro.css" rel="stylesheet" type="text/css" >
 <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/js/esri/css/esri.css" />
+<link rel="stylesheet" type="text/css" href="http://coolmaps.esri.com/css/font.css" />
+
 <script src="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/" type="text/javascript"></script>
 <link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/js/dojo/dijit/themes/tundra/tundra.css">
 
@@ -13,6 +15,7 @@
     height:100%;
   }
   
+  
   #infoContainer{
 	width:100%;
 	position:absolute;
@@ -20,18 +23,56 @@
 	z-index:50;
   }
   
-  #info{
-	border: 2px solid;
-	border-radius:5px;
-	color:#000; 
-	z-index:50;
-	background-color:white;
-	width:150px;
-	margin:0px auto;
-	font-family:segoe ui;
-	text-align:center;
-	font-size:14px;
+  #toolbar{
+  	border: 0px solid;
+  	border-radius:10px;
+  	color:#fff; 
+  	z-index:50;
+  	background-color:rgba(0, 0, 0, 0.8);
+    filter:alpha(opacity=80); /* For IE8 and earlier */
+  	width:80%;
+    height:90px;
+  	margin:0px auto;
+  	font-family:segoe ui;
+  	text-align:center;
+  	font-size:14px;
+    display:block;
+    padding: 10px;
   }
+
+  #taxonLocator
+  {  
+    border-radius:10px;
+    z-index:60;
+    background-color:#1f9400;
+    font-family: Segoe UI;
+    font-size: 14px;
+    color: black;
+    text-align:left;
+    width: 380px;
+    height:70px;
+    padding: 8px;
+  }
+
+  #taxonLocatorTitle{
+      font-family: Segoe UI;
+      font-size: 14px;
+      z-index:50;
+      background-color:#1f9400;
+      display: inline;
+      font-weight: bold;
+      color: black;
+
+    }
+
+  #speciesDisp{
+      font-family: HelveticaNeueUltraLight;
+      font-size: 40px;
+      position: absolute;
+      top:20px;
+      left:600px;
+    }
+
   </style>
   
 </head>
@@ -39,9 +80,25 @@
 <body class="claro">
   <div id="mapDiv">
 	<div id="infoContainer" />
-		<div id="info" />
+		<div id="toolbar" >
+      <div id="taxonLocator">
+        <div id="taxonLocatorTitle">Species Selector:</div></br>
+        Select a taxon group:&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        <select>
+          <option value="NHMSYS0000080031">acorn worm (Hemichordata)</option>
+          <option value="NHMSYS0000080032">alga</option>
+          <option value="NHMSYS0000080033">amphibian</option>
+          <option value="NHMSYS0000080034">annelid</option>
+          <option value="NHMSYS0000080036">arrow worm (Chaetognatha)</option>
+          <option value="NHMSYS0000080037">bacterium</option>
+          <option value="NHMSYS0000080039" selected="true">bird</option>
+        </select><br/>
+        Find species in taxon group: 
+        <input type="text" id="taxonVersionKey" value="Encrusting green algae" />
+      </div>
+      <div id="speciesDisp"><span style="font-size: 20px;">Selected Species:</span> Common Swift <br/><div style="font-size: 20px;">(Apus apus)</div></div> 
+    </div>
 	</div>
-  </div>
 </body>
 
 </body>
@@ -53,6 +110,9 @@
 		dojo.require("esri.dijit.Popup");
 
 		var map;
+    var taxonVersionKey = "NHMSYS0000530165"; // Actitis macularius, Common Swift
+
+
   function init() {
   
   
@@ -67,9 +127,10 @@
         
         map = new esri.Map("mapDiv", {
           basemap: "topo",
-          center: [-1.131592,52.636397],
-          zoom: 8,
-          infoWindow: popup
+          center: [-6.303749, 49.922493],
+          zoom: 12,
+          infoWindow: popup,
+
         });
         
         //define a popup template
@@ -82,43 +143,54 @@
           showAttachments:true
         });
 	  
-	    //create a feature layer with watershed features of californian coast
+	    //create a feature layer with Ramsar Sites
         var featureLayer = new esri.layers.FeatureLayer("https://services.arcgis.com/QHC5QIxkyl7GRuXB/arcgis/rest/services/UK_Ramsar_GIS_NBN/FeatureServer/0", {
           mode: esri.layers.FeatureLayer.MODE_SNAPSHOT,
           infoTemplate: popupTemplate,
           outFields: ["SITE_NAME", "SITE_CODE", "NBNCODE"],
-		  transparency:0.5
+		      transparency:0.5,
+          setMaxAllowableOffset:5000
         });
         
         dojo.connect(featureLayer, "onClick", function(evt){
            map.infoWindow.setFeatures([evt.graphic]);
 		   
-		dojo.connect(map, "onMouseMove", showCoordinates);
-		dojo.connect(map, "onMouseDrag", showCoordinates);
         });
-    dojo.connect(map, "onZoomEnd", function() { featureLayer.setMaxAllowableOffset(maxOffset(map,1)); }); 
+
+        //generalize features on the server side
+        dojo.connect(map, "onZoomEnd", function() { featureLayer.setMaxAllowableOffset(maxOffset(map,1)); }); 
 		
-		function showCoordinates(evt) {
-        //get mapPoint from event
-        //The map is in web mercator - modify the map point to display the results in geographic
-        var mp = esri.geometry.webMercatorToGeographic(evt.mapPoint);
-        //display mouse coordinates
-        dojo.byId("info").innerHTML = mp.x.toFixed(3) + ", " + mp.y.toFixed(3);
-      }
-
-
-    //The offset is calculated as approximately 1 vertex per pixel: 
-    var maxOffset = function maxOffset(map, pixelTolerance) { 
-      var offset = Math.floor(map.extent.getWidth() / map.width) * pixelTolerance;
-      console.log(offset);
-      return offset; };
+        //The offset is calculated as approximately 1 vertex per pixel: 
+        var maxOffset = function maxOffset(map, pixelTolerance) { 
+        var offset = Math.floor(map.extent.getWidth() / map.width) * pixelTolerance;
+        return offset; };
 	  
         
         map.addLayer(featureLayer);
 
+        // call NBN SpeciesList JSOn Service for Site
+          // GA000326439 Scilly Islands
+         var url = esri.urlToObject("http://staging.testnbn.net/api/taxonObservations/species?featureID=GA000326439&ptvk=NHMSYS0000530165");
+          
+        esri.config.defaults.io.proxyUrl = "/RamsarNBNTool/proxy/proxy.ashx";
+
+        var requestHandle = esri.request({
+          url: url.path,
+          content: url.query
+        });
+        requestHandle.then(requestSucceeded, requestFailed);
+
+    
 		
   }
-  
+    
+    function requestSucceeded(response, io) {
+      console.log("Succeeded: ", response);
+    }
+
+    function requestFailed(error, io) {
+      console.log("Failed: ", error);
+    }
   
   
   dojo.addOnLoad(init);
