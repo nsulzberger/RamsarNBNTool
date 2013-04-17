@@ -7,7 +7,6 @@
 
 <script src="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/" type="text/javascript"></script>
 <link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/js/dojo/dijit/themes/tundra/tundra.css">
-
 <style>
   html,body,#mapDiv,.map.container{
     padding:0;
@@ -15,13 +14,37 @@
     height:100%;
   }
 
+  input, th{
+    font-family: Segoe UI;
+  }
+  
+  th, td{
+    font-size: :6px;
+    font-weight: normal;
+  }
+  #grid{
+    height:320px;
+    font-size: :6px;
+    font-weight: normal;
+  }
+  
+
+  .gridCell{
+    font-size: :6px;
+    font-family: Segoe UI;
+    font-weight: normal;
+    background-color:rgba(0, 0, 0, 0.8);
+    border-color: gray;
+  }
+  
   #siteInfoContainer{
-    width:200px;
+    width:500px;
     height:400px;
     position:absolute;
     bottom:120px;
-    right:127px;
-    border: 0px solid;
+    right:145px;
+    border: 0px solid black;
+    border-color: :rgba(0, 0, 0, 0.8);
     border-radius:10px;
     color:#fff; 
     z-index:50;
@@ -64,14 +87,14 @@
     font-size: 14px;
     color: black;
     text-align:left;
-    width: 380px;
+    width: 260px;
     height:70px;
     padding: 8px;
   }
 
   #taxonLocatorTitle{
-      font-family: Segoe UI;
-      font-size: 14px;
+      font-family: HelveticaNeueUltraLight;
+      font-size: 20px;
       z-index:50;
       background-color:#1f9400;
       display: inline;
@@ -83,11 +106,10 @@
   #speciesListTitle
   {  
     font-family: HelveticaNeueUltraLight;
-      font-size: 20px;
+      font-size: 28px;
       z-index:50;
       display: inline;
       color: white;
-      padding: 20px;
   }
 
   #siteDisp{
@@ -96,6 +118,7 @@
       position: absolute;
       top:20px;
       left:600px;
+      color:white;
     }
 
   </style>
@@ -105,13 +128,13 @@
 <body class="claro">
   <div id="mapDiv">
   <div id="siteInfoContainer">
-    <div id="speciesListTitle">Species List</div>
+    <div id="speciesListTitle"><br/>&nbsp;&nbsp;bird species records<br/></div>
+    <div id="grid"> </div>
   </div>
 	<div id="infoContainer"/>
 		<div id="toolbar" >
       <div id="taxonLocator">
-        <div id="taxonLocatorTitle">Site Locator:</div></br>
-        Find Ramsar Site:
+        <div id="taxonLocatorTitle">UK Ramsar Site Locator:</div></br>
         <!--select>
           <option value="NHMSYS0000080031">acorn worm (Hemichordata)</option>
           <option value="NHMSYS0000080032">alga</option>
@@ -121,9 +144,10 @@
           <option value="NHMSYS0000080037">bacterium</option>
           <option value="NHMSYS0000080039" selected="true">bird</option>
         </select--> 
-        <input type="text" id="siteSearchString" value="Scilly" />
+        <input type="text" id="siteSearchString" value="" onkeydown="if (event.keyCode == 13) querySite(this.value)"/>
+        <input type ="button"  value = "Search" onClick ="querySite(dojo.byId('siteSearchString').value)"
       </div>
-      <div id="siteDisp"><span style="font-size: 20px;">Selected Site:</span> Isles of Scilly <br/><div style="font-size: 20px;">(United Kingdom)</div></div> 
+      <div id="siteDisp"><span style='font-size: 20px;''>Discover bird population in UK Ramsar sites</span></div> 
     </div>
 	</div>
 </body>
@@ -132,13 +156,20 @@
 <script type="text/javascript">
 		dojo.require("dijit.layout.BorderContainer");
 		dojo.require("dijit.layout.ContentPane");
+    dojo.require("dojox.grid.DataGrid");
+    dojo.require("dojo.data.ItemFileReadStore");
+    dojo.require("esri.dijit.Popup");
+    dojo.require("esri.layers.FeatureLayer");
 		dojo.require("esri.map");
-		dojo.require("esri.layers.FeatureLayer");
-		dojo.require("esri.dijit.Popup");
+    dojo.require("esri.tasks.query");
+    dojo.require("dojo.parser");
+    dojo.require("dojo.number");
 
-		var map;
+
+		var map, queryTask, query;
     var taxonVersionKey = "NHMSYS0000530165"; // Actitis macularius, Common Swift
-    var siteName = "Isles of Scilly";
+    var siteName;
+    var siteSearchString;
 
 
   function init() {
@@ -155,8 +186,8 @@
         
         map = new esri.Map("mapDiv", {
           basemap: "topo",
-          center: [-6.303749, 49.922493],
-          zoom: 12,
+          center: [-3.251953,53.93022],
+          zoom: 6,
           infoWindow: popup,
 
         });
@@ -177,7 +208,8 @@
           infoTemplate: popupTemplate,
           outFields: ["SITE_NAME", "SITE_CODE", "NBNCODE"],
 		      transparency:0.5,
-          setMaxAllowableOffset:500000
+          setMaxAllowableOffset:500000,
+          minScale: 500000
         });
         
         dojo.connect(featureLayer, "onClick", function(evt){
@@ -196,29 +228,130 @@
         
         map.addLayer(featureLayer);
 
-        // call NBN SpeciesList JSOn Service for Site
-        // GA000326439 Scilly Islands
-         var url = esri.urlToObject("http://staging.testnbn.net/api/taxonObservations/species?featureID=GA000326439");
-          
-        esri.config.defaults.io.proxyUrl = "/RamsarNBNTool/proxy/proxy.ashx";
-
-        var requestHandle = esri.request({
-          url: url.path,
-          content: url.query
-        });
-        requestHandle.then(slRequestSucceeded, slRequestFailed);
-
-    
-		
+       
+        //build query task
+        queryTask = new esri.tasks.QueryTask("https://services.arcgis.com/QHC5QIxkyl7GRuXB/arcgis/rest/services/UK_Ramsar_GIS_NBN/FeatureServer/0");
   }
-    
+
+  function querySite(searchString)
+  {
+          //display Searching
+          dojo.byId("siteDisp").innerhtml= "Searching...";
+
+        console.log("searchString: "+searchString);
+        siteSearchString = searchString;
+        //build query filter
+        query = new esri.tasks.Query();
+        query.returnGeometry = true;
+        query.outFields = ["SITE_NAME", "SITE_CODE", "NBNCODE"];
+        query.where = "UPPER(SITE_NAME) LIKE UPPER('%"+ siteSearchString +"%')";
+
+          //connect to query completed event to display result on map
+          dojo.connect(queryTask, "onComplete", function(featureSet) {
+          map.graphics.clear();
+          var highlightSymbol = new esri.symbol.SimpleFillSymbol(esri.symbol.SimpleFillSymbol.STYLE_SOLID, new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_SOLID, new dojo.Color([255,0,0]), 3), new dojo.Color([125,125,125,0.35]));
+          //var highlightSymbol = new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_SOLID, new dojo.Color([255,0,0]), 3);
+          var symbol = new esri.symbol.SimpleFillSymbol(esri.symbol.SimpleFillSymbol.STYLE_SOLID, new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_SOLID, new dojo.Color([255,255,255,0.35]), 1),new dojo.Color([125,125,125,0.35]));
+
+          console.log("site query result count: "+featureSet.features.length);
+          
+          if( featureSet.features.length > 0 )
+          {
+            //QueryTask returns a featureSet.  Loop through features in the featureSet and add them to the map.
+            for (var i=0, il=featureSet.features.length; i<il; i++) 
+            {
+                //Get the current feature from the featureSet.
+                //Feature is a graphic
+                var graphic = featureSet.features[i];
+                //Add graphic to the map
+                var highlightGraphic = new esri.Graphic(graphic.geometry,highlightSymbol);
+                map.graphics.add(highlightGraphic);
+
+            }
+            //zoom to feature[0]
+            var siteExtent = graphic.geometry.getExtent().expand(5.0);
+            map.setExtent(siteExtent);
+
+            //display Site name
+            console.log("site Name: "+graphic.attributes.SITE_NAME)
+            dojo.byId("siteDisp").innerHTML = "<span style='font-size: 20px;''>Selected Site: </span>"+graphic.attributes.SITE_NAME;
+
+            // Display Site records info window
+            var container = dojo.byId("siteInfoContainer");
+            dojo.style(container, "opacity", 1);
+
+
+             // call NBN SpeciesList JSON Service for Site for taxon group bird NHMSYS0000080039
+            var nbnSiteKey = graphic.attributes.NBNCODE;
+            
+            var url = esri.urlToObject("http://staging.testnbn.net/api/taxonObservations/species?featureID="+nbnSiteKey+"&taxonOutputGroup=NHMSYS0000080039");
+            
+            esri.config.defaults.io.proxyUrl = "/RamsarNBNTool/proxy/proxy.ashx";
+
+            var requestHandle = esri.request({
+              url: url.path,
+              content: url.query
+            });
+            requestHandle.then(slRequestSucceeded, slRequestFailed);
+          }
+
+          else
+          {
+            dojo.byId("siteDisp").innerHTML = "<span style='font-size: 20px;''>No Ramsar site found</span>"
+          }
+        });
+
+        queryTask.execute(query); 
+
+  }
+  
     function slRequestSucceeded(response, io) {
-      console.log("Succeeded: ", response);
+      console.log("Succeeded: ");
 
-      var speciesList = dojo.toJson(response, true);
+       var items = [];
 
-      var container = dojo.byId("siteInfoContainer");
-      dojo.style(container, "opacity", 1);
+      dojo.forEach(response, function(entry){
+
+            var species = 
+            {
+              taxonVersionKey: entry.taxonVersionKey,
+              commonName: entry.taxon.commonName,
+              name: entry.taxon.name,
+              recordCount: entry.querySpecificObservationCount
+            };
+            items.push(species);
+      })
+ 
+      //Create data object to be used in store
+        var data = {
+          identifier: "taxonVersionKey",  //This field needs to have unique values
+          label: "taxonVersionKey", //Name field for display. Not pertinent to a grid but may be used elsewhere.
+          items: items
+        };
+
+         //Create data store and bind to grid.
+        store = new dojo.data.ItemFileReadStore({ data:data });
+
+        var gridDijit = dijit.byId("grid");
+        if(gridDijit != undefined)
+        {
+          gridDijit.setStore(store);
+        }
+        else
+        {
+        grid = new dojox.grid.DataGrid({
+          store: store,
+          structure: [
+              { name: "Common Name", field: "commonName", width: "100%", classes: "gridCell" },
+              { name: "Name", field: "name", width: "180px", classes: "gridCell" },
+              { name: "Record Count", field: "recordCount", width: "50px", classes: "gridCell" }
+          ]
+        }, "grid");
+
+        // since we created this grid programmatically, call startup to render it
+        grid.startup();
+      }
+
     }
 
     function slRequestFailed(error, io) {
