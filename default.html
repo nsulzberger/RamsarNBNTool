@@ -14,6 +14,21 @@
     margin:0;
     height:100%;
   }
+
+  #siteInfoContainer{
+    width:200px;
+    height:400px;
+    position:absolute;
+    bottom:120px;
+    right:127px;
+    border: 0px solid;
+    border-radius:10px;
+    color:#fff; 
+    z-index:50;
+    background-color:rgba(0, 0, 0, 0.8);
+    filter:alpha(opacity=80); /* For IE8 and earlier */
+    opacity: 0;
+  }
   
   
   #infoContainer{
@@ -65,7 +80,17 @@
 
     }
 
-  #speciesDisp{
+  #speciesListTitle
+  {  
+    font-family: HelveticaNeueUltraLight;
+      font-size: 20px;
+      z-index:50;
+      display: inline;
+      color: white;
+      padding: 20px;
+  }
+
+  #siteDisp{
       font-family: HelveticaNeueUltraLight;
       font-size: 40px;
       position: absolute;
@@ -79,12 +104,15 @@
 <body>
 <body class="claro">
   <div id="mapDiv">
-	<div id="infoContainer" />
+  <div id="siteInfoContainer">
+    <div id="speciesListTitle">Species List</div>
+  </div>
+	<div id="infoContainer"/>
 		<div id="toolbar" >
       <div id="taxonLocator">
-        <div id="taxonLocatorTitle">Species Selector:</div></br>
-        Select a taxon group:&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-        <select>
+        <div id="taxonLocatorTitle">Site Locator:</div></br>
+        Find Ramsar Site:
+        <!--select>
           <option value="NHMSYS0000080031">acorn worm (Hemichordata)</option>
           <option value="NHMSYS0000080032">alga</option>
           <option value="NHMSYS0000080033">amphibian</option>
@@ -92,11 +120,10 @@
           <option value="NHMSYS0000080036">arrow worm (Chaetognatha)</option>
           <option value="NHMSYS0000080037">bacterium</option>
           <option value="NHMSYS0000080039" selected="true">bird</option>
-        </select><br/>
-        Find species in taxon group: 
-        <input type="text" id="taxonVersionKey" value="Encrusting green algae" />
+        </select--> 
+        <input type="text" id="siteSearchString" value="Scilly" />
       </div>
-      <div id="speciesDisp"><span style="font-size: 20px;">Selected Species:</span> Common Swift <br/><div style="font-size: 20px;">(Apus apus)</div></div> 
+      <div id="siteDisp"><span style="font-size: 20px;">Selected Site:</span> Isles of Scilly <br/><div style="font-size: 20px;">(United Kingdom)</div></div> 
     </div>
 	</div>
 </body>
@@ -111,6 +138,7 @@
 
 		var map;
     var taxonVersionKey = "NHMSYS0000530165"; // Actitis macularius, Common Swift
+    var siteName = "Isles of Scilly";
 
 
   function init() {
@@ -149,7 +177,7 @@
           infoTemplate: popupTemplate,
           outFields: ["SITE_NAME", "SITE_CODE", "NBNCODE"],
 		      transparency:0.5,
-          setMaxAllowableOffset:5000
+          setMaxAllowableOffset:500000
         });
         
         dojo.connect(featureLayer, "onClick", function(evt){
@@ -169,8 +197,8 @@
         map.addLayer(featureLayer);
 
         // call NBN SpeciesList JSOn Service for Site
-          // GA000326439 Scilly Islands
-         var url = esri.urlToObject("http://staging.testnbn.net/api/taxonObservations/species?featureID=GA000326439&ptvk=NHMSYS0000530165");
+        // GA000326439 Scilly Islands
+         var url = esri.urlToObject("http://staging.testnbn.net/api/taxonObservations/species?featureID=GA000326439");
           
         esri.config.defaults.io.proxyUrl = "/RamsarNBNTool/proxy/proxy.ashx";
 
@@ -178,17 +206,22 @@
           url: url.path,
           content: url.query
         });
-        requestHandle.then(requestSucceeded, requestFailed);
+        requestHandle.then(slRequestSucceeded, slRequestFailed);
 
     
 		
   }
     
-    function requestSucceeded(response, io) {
+    function slRequestSucceeded(response, io) {
       console.log("Succeeded: ", response);
+
+      var speciesList = dojo.toJson(response, true);
+
+      var container = dojo.byId("siteInfoContainer");
+      dojo.style(container, "opacity", 1);
     }
 
-    function requestFailed(error, io) {
+    function slRequestFailed(error, io) {
       console.log("Failed: ", error);
     }
   
