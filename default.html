@@ -5,7 +5,17 @@
 <link rel="stylesheet" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/js/esri/css/esri.css" />
 <link rel="stylesheet" type="text/css" href="http://coolmaps.esri.com/css/font.css" />
 
+<script>
+      var dojoConfig = { 
+        parseOnLoad: true,
+        packages: [{
+          "name": "extras",
+          "location": location.pathname.replace(/\/[^/]+$/, '') + "/extras"
+        }]
+      };
+    </script>
 <script src="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/" type="text/javascript"></script>
+
 <link rel="stylesheet" type="text/css" href="http://serverapi.arcgisonline.com/jsapi/arcgis/3.4/js/dojo/dijit/themes/tundra/tundra.css">
 <style>
   html,body,#mapDiv,.map.container{
@@ -36,6 +46,12 @@
     background-color:rgba(0, 0, 0, 0.8);
     border-color: gray;
   }
+
+  /* This will change the style of your grid header*/
+.dojoxGridHeader {
+  background-color: #E8E1CF;
+  color:black;
+}
   
   #siteInfoContainer{
     width:500px;
@@ -93,7 +109,7 @@
   }
 
   #taxonLocatorTitle{
-      font-family: HelveticaNeueUltraLight;
+      font-family: HelveticaNeueUltraLight, segoe ui, arial;
       font-size: 20px;
       z-index:50;
       background-color:#1f9400;
@@ -105,7 +121,7 @@
 
   #speciesListTitle
   {  
-    font-family: HelveticaNeueUltraLight;
+    font-family: HelveticaNeueUltraLight, segoe ui, arial;
       font-size: 28px;
       z-index:50;
       display: inline;
@@ -113,7 +129,7 @@
   }
 
   #siteDisp{
-      font-family: HelveticaNeueUltraLight;
+      font-family: HelveticaNeueUltraLight, segoe ui, arial;
       font-size: 40px;
       position: absolute;
       top:20px;
@@ -164,16 +180,30 @@
     dojo.require("esri.tasks.query");
     dojo.require("dojo.parser");
     dojo.require("dojo.number");
+    dojo.require("extras.ClusterLayer");
 
 
-		var map, queryTask, query;
+		var map, queryTask, query, clusterLayer;
     var taxonVersionKey = "NHMSYS0000530165"; // Actitis macularius, Common Swift
     var siteName;
     var siteSearchString;
+    
+    var popupTemplate
+
 
 
   function init() {
   
+        //define a popup template
+          popupTemplate = new esri.dijit.PopupTemplate({
+          title: "{SITE_NAME}",
+          fieldInfos: [
+          {fieldName: "SITE_CODE", visible: true, label:"Site Number"},
+          {fieldName: "NBNCODE", visible:true, label:"NBN Code" }
+          ],
+          showAttachments:true
+        });
+
   
       //define custom popup options
         var popupOptions = {
@@ -191,34 +221,32 @@
           infoWindow: popup,
 
         });
-        
-        //define a popup template
-        var popupTemplate = new esri.dijit.PopupTemplate({
-          title: "{SITE_NAME}",
-          fieldInfos: [
-          {fieldName: "SITE_CODE", visible: true, label:"Site Number"},
-          {fieldName: "NBNCODE", visible:true, label:"NBN Code" }
-          ],
-          showAttachments:true
-        });
 	  
 	    //create a feature layer with Ramsar Sites
-        var featureLayer = new esri.layers.FeatureLayer("https://services.arcgis.com/QHC5QIxkyl7GRuXB/arcgis/rest/services/UK_Ramsar_GIS_NBN/FeatureServer/0", {
+        var ramsarFeatureLayer = new esri.layers.FeatureLayer("http://services.arcgis.com/QHC5QIxkyl7GRuXB/arcgis/rest/services/Ramsar_UK_NBN_3857/FeatureServer/0", {
           mode: esri.layers.FeatureLayer.MODE_SNAPSHOT,
           infoTemplate: popupTemplate,
           outFields: ["SITE_NAME", "SITE_CODE", "NBNCODE"],
 		      transparency:0.5,
-          setMaxAllowableOffset:500000,
-          minScale: 500000
+          minScale: 500000, 
+          maxscale: 0
         });
         
-        dojo.connect(featureLayer, "onClick", function(evt){
+        //create a feature layer with Ramsar Sites Center Points
+        //var ramsarPointLayer = new esri.layers.FeatureLayer("http://services.arcgis.com/QHC5QIxkyl7GRuXB/arcgis/rest/services/Ramsar_UK_NBN_CenterPoints/FeatureServer/0", {
+        //  mode: esri.layers.FeatureLayer.MODE_SNAPSHOT,
+        //  transparency:0.5,
+        //  maxScale: 500000, 
+        //  minscale:0
+        //});
+
+        dojo.connect(ramsarFeatureLayer, "onClick", function(evt){
            map.infoWindow.setFeatures([evt.graphic]);
 		   
         });
 
         //generalize features on the server side
-        dojo.connect(map, "onZoomEnd", function() { featureLayer.setMaxAllowableOffset(maxOffset(map,1)); }); 
+        dojo.connect(map, "onZoomEnd", function() { ramsarFeatureLayer.setMaxAllowableOffset(maxOffset(map,1)); }); 
 		
         //The offset is calculated as approximately 1 vertex per pixel: 
         var maxOffset = function maxOffset(map, pixelTolerance) { 
@@ -226,11 +254,14 @@
         return offset; };
 	  
         
-        map.addLayer(featureLayer);
-
+        map.addLayer(ramsarFeatureLayer);
+        //map.addLayer(ramsarPointLayer);
        
+        //add the Point Cluster Layer to the map
+        buildPointClusters()
+
         //build query task
-        queryTask = new esri.tasks.QueryTask("https://services.arcgis.com/QHC5QIxkyl7GRuXB/arcgis/rest/services/UK_Ramsar_GIS_NBN/FeatureServer/0");
+        queryTask = new esri.tasks.QueryTask("http://services.arcgis.com/QHC5QIxkyl7GRuXB/arcgis/rest/services/Ramsar_UK_NBN_3857/FeatureServer/0");
   }
 
   function querySite(searchString)
@@ -241,10 +272,12 @@
         console.log("searchString: "+searchString);
         siteSearchString = searchString;
         //build query filter
+        var random = (new Date()).getTime();
+
         query = new esri.tasks.Query();
         query.returnGeometry = true;
         query.outFields = ["SITE_NAME", "SITE_CODE", "NBNCODE"];
-        query.where = "UPPER(SITE_NAME) LIKE UPPER('%"+ siteSearchString +"%')";
+        query.where = "UPPER(SITE_NAME) LIKE UPPER('%"+ siteSearchString +"%')"+ " AND " + random + "=" + random; 
 
           //connect to query completed event to display result on map
           dojo.connect(queryTask, "onComplete", function(featureSet) {
@@ -269,7 +302,7 @@
 
             }
             //zoom to feature[0]
-            var siteExtent = graphic.geometry.getExtent().expand(5.0);
+            var siteExtent = graphic.geometry.getExtent().expand(1.5);
             map.setExtent(siteExtent);
 
             //display Site name
@@ -357,6 +390,82 @@
     function slRequestFailed(error, io) {
       console.log("Failed: ", error);
     }
+
+    function buildPointClusters(){
+
+    // layer 0 in the service contains all server locations and will be used to cluster
+    var random = (new Date()).getTime();
+    var pointQueryTask = new esri.tasks.QueryTask("http://services.arcgis.com/QHC5QIxkyl7GRuXB/arcgis/rest/services/Ramsar_UK_NBN_CenterPoints/FeatureServer/0");
+    var pointQuery = new esri.tasks.Query();
+    pointQuery.returnGeometry = true;
+    pointQuery.where = '1=1'+ " AND " + random + "=" + random; 
+    pointQuery.outFields = ["*"];
+    
+    dojo.connect(pointQueryTask, "onComplete", function(featureSet){
+        console.log("cluster layer query completed");
+        var inputInfo = {};
+        inputInfo.data = dojo.map(featureSet.features, function(feature){
+            var pointX = feature.geometry.x;
+            var pointY = feature.geometry.y;
+            var att = feature.attributes;
+            return {
+                "x": pointX,
+                "y": pointY,
+                "attributes": att
+            };
+        });
+        
+        console.log("inputinfo.data", inputInfo.data);
+        // cluster layer that uses OpenLayers style clustering 
+        clusterLayer = new extras.ClusterLayer({
+            "data": inputInfo.data,
+            "distance": 100,
+            "id": "clusters",
+            "labelColor": "#fff",
+            "labelOffset": 10,
+            "resolution": map.extent.getWidth() / map.width,
+            "singleColor": "#888",
+            "maxScale": 500000,
+            "singleTemplate": popupTemplate
+        });
+
+        console.log("cluster layer created");
+
+        var defaultSym = new esri.symbol.SimpleMarkerSymbol().setSize(4);
+        var renderer = new esri.renderer.ClassBreaksRenderer(defaultSym, "clusterCount");
+        var blue = new esri.symbol.PictureMarkerSymbol("http://static.arcgis.com/images/Symbols/Shapes/BluePin1LargeB.png", 32, 32).setOffset(0, 15);
+        var green = new esri.symbol.PictureMarkerSymbol("http://static.arcgis.com/images/Symbols/Shapes/GreenPin1LargeB.png", 64, 64).setOffset(0, 15);
+        var red = new esri.symbol.PictureMarkerSymbol("http://static.arcgis.com/images/Symbols/Shapes/RedPin1LargeB.png", 72, 72).setOffset(0, 15);
+        renderer.addBreak(0, 2, blue);
+        renderer.addBreak(2, 200, green);
+        renderer.addBreak(200, 1001, red);
+        console.log("cluster layer renderercreated");
+
+        clusterLayer.setRenderer(renderer);
+        map.addLayer(clusterLayer);
+        console.log("cluster layer added");
+        
+
+        // close the info window when esc is pressed
+        dojo.connect(map, "onKeyDown", function(e) {
+          if ( e.keyCode == 27 ) { 
+            cleanUp();
+          }
+        });
+        
+        dojo.connect(pointQueryTask, "onError", function(err){
+            alert(err.details);
+        });
+        
+        
+    });
+    pointQueryTask.execute(pointQuery);
+}
+
+      function cleanUp() {
+        map.infoWindow.hide();
+        clusterLayer.clearSingles();
+      }
   
   
   dojo.addOnLoad(init);
